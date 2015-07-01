@@ -36,7 +36,7 @@ int main(int argc, char** argv)
     for (int i = 1; i < argc; i++) { /* We will iterate over argv[] to get the parameters stored inside.
                                               * Note that we're starting on 1 because we don't need to know the
                                               * path of the program, which is stored in argv[0] */
-        if (i + 1 != argc) // Check that we haven't finished parsing already
+        if (i + 1 != argc){ // Check that we haven't finished parsing already
             if (string(argv[i]) == "-s") {
                 // We know the next argument *should* be the threshold:
                 threshold = atof( argv[i + 1] );
@@ -45,11 +45,13 @@ int main(int argc, char** argv)
 
             } else if (string(argv[i]) == "-o") {
                 outputPath = argv[i + 1];
-            }else if (string(argv[i]) == "-h") {
+            } else if (string(argv[i]) == "-h") {
                 show_help(argv);
-            }else if (string(argv[i]) == "-show") {
-                showGUI = true;
             }
+        }
+        if (string(argv[i]) == "-show") {
+            showGUI = true;
+        }
     }
     if(outputPath.compare("") == 0 || outputPath.compare(" ") == 0 ){
         //default output filename
