@@ -33,3 +33,7 @@ Also you can use GCC compiler directly (using g++ command) to build the software
 Example: 
 ./ShotDetection -i test.mp4 -o outputs -show
 
+##5. Support
+
+ - yildirimyasi(at)gmail(dot)com
+
