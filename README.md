@@ -12,8 +12,8 @@ Currently, XML, YAML and TEXT (simple .txt file) formats are supported.
 
  - OpenCV 2.3 or greater
  - g++ (gcc)
- - make (only necessary if Makefile is used for build the program)
- - pkg-config (only necessary if Makefile is used for build the program)
+ - make (only necessary if Makefile is used for building program)
+ - pkg-config (only necessary if Makefile is used to build program)
 
 ##3. Build and Install
 
