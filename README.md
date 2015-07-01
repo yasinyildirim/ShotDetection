@@ -37,3 +37,6 @@ Example:
 
  - yildirimyasi(at)gmail(dot)com
 
+##6. License
+
+Licensed under GNU Lesser General Public License (LGPL). See COPYING and LICENSE files for details.
