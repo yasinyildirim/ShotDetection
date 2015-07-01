@@ -17,7 +17,7 @@ Currently, XML, YAML and TEXT (simple .txt file) formats are supported.
 
 ##3. Build and Install
 
-In order to build the software, cd inside the main directory and run below command in terminal (or command promt):
+In order to build the software, cd inside the main directory and run below command in terminal (or command prompt):
 ```
 make
 ```
