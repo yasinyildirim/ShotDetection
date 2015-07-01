@@ -10,6 +10,10 @@
 *.dll
 *.dylib
 
+# ignore these folders
+android/
+OpenCV-2.3.1-android-bin/
+
 # Qt-es
 
 /.qmake.cache
