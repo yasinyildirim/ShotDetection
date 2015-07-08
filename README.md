@@ -29,7 +29,7 @@ Also you can use GCC compiler directly (using g++ command) to build the software
           -t threshold     : Set threshold value. This value specifies sensitivity of detecting shots.
           -i file          : Sets input video file
           -o output_path   : save detected shots to output path 'output_path'
-          -s sample_size   : set the sample size of stored frames. (Default = 30)
+          -s sample_size   : set the sample size of stored frames. (Default = 0)
           -show            : display the shots on GUI (Graphical Version)
 Example: 
 ./ShotDetection -i test.mp4 -o outputs -show

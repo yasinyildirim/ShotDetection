@@ -23,7 +23,7 @@ using namespace std;
  * @param filename: Video filename or full path
  * @param threshold: Threshold value for shot detection.
  */
-ShotDetector::ShotDetector(std::string filename, double threshold): sample_size(30)
+ShotDetector::ShotDetector(std::string filename, double threshold): sample_size(0)
 {
     this->videoPath = filename;
     this->threshold = threshold;
@@ -196,8 +196,14 @@ void ShotDetector::processVideo(std::string outputFileName, OutputFormat format)
     stringstream ss;
     ss << outputFileName;
 
+
+#ifdef _WIN32
+    //create directory if not exists
+    string create_dir_command("mkdir ");
+#else
     //create directory if not exists
     string create_dir_command("mkdir -p ");
+#endif
     create_dir_command += outputFileName;
     system(create_dir_command.c_str());
 
@@ -324,7 +330,7 @@ void ShotDetector::processVideo(std::string outputFileName, OutputFormat format)
             shotFoundAtPrev = false;
         }
 
-        if(frameCounter == this->sample_size){
+        if(this->sample_size != 0 && frameCounter == this->sample_size){
             int frame_number = (int) cap.get(CV_CAP_PROP_POS_FRAMES);
             fstorage << "frame_number" <<frame_number << "time" << miliseconds_to_DHMS( cap.get(CV_CAP_PROP_POS_MSEC) );
             string frameStoragePath(rootShotPath);
@@ -506,7 +512,7 @@ void ShotDetector::processVideo_NoGUI(std::string outputFileName, OutputFormat f
             shotFoundAtPrev = false;
         }
 
-        if(frameCounter == this->sample_size){
+        if(this->sample_size != 0 && frameCounter == this->sample_size){
             int frame_number = (int) cap.get(CV_CAP_PROP_POS_FRAMES);
             fstorage << "frame_number" <<frame_number << "time" << miliseconds_to_DHMS( cap.get(CV_CAP_PROP_POS_MSEC) );
             string frameStoragePath(rootShotPath);
