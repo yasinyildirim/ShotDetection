@@ -17,6 +17,7 @@
 #define DEFAULT_THRESHOLD 0.49
 #define APP_VERSION "1.0.0"
 #define ENABLE_GUI false
+#define DEFAULT_SAMPLE_SIZE 30
 
 using namespace std;
 using namespace cv;
@@ -25,9 +26,9 @@ void show_help(char** );
 
 int main(int argc, char** argv)
 {
-
     double threshold = DEFAULT_THRESHOLD;
     bool showGUI = ENABLE_GUI;
+    int sample_size = DEFAULT_SAMPLE_SIZE;
     string videoFile, outputPath;
     if (argc < 4) { // Check the value of argc. If not enough parameters have been passed, inform user and exit.
         show_help(argv);
@@ -37,7 +38,7 @@ int main(int argc, char** argv)
                                               * Note that we're starting on 1 because we don't need to know the
                                               * path of the program, which is stored in argv[0] */
         if (i + 1 != argc){ // Check that we haven't finished parsing already
-            if (string(argv[i]) == "-s") {
+            if (string(argv[i]) == "-t") {
                 // We know the next argument *should* be the threshold:
                 threshold = atof( argv[i + 1] );
             } else if (string(argv[i]) == "-i") {
@@ -45,6 +46,8 @@ int main(int argc, char** argv)
 
             } else if (string(argv[i]) == "-o") {
                 outputPath = argv[i + 1];
+            } else if (string(argv[i]) == "-s") {
+                sample_size = atoi( argv[i + 1] );
             } else if (string(argv[i]) == "-h") {
                 show_help(argv);
             }
@@ -60,20 +63,21 @@ int main(int argc, char** argv)
     switch(showGUI){
     case true:
     {
-        ShotDetector sd(videoFile, threshold);
+        ShotDetector sd(videoFile, threshold, sample_size);
         sd.processVideo(outputPath, ShotDetector::XML);
         break;
     }
     case false:
     {
         cout <<"video file: " << videoFile <<endl;
-        ShotDetector sd(videoFile, threshold);
+        ShotDetector sd(videoFile, threshold, sample_size);
         int64 start_t =  cv::getTickCount();
         sd.processVideo_NoGUI(outputPath, ShotDetector::XML);
+
         int64 stop_t =  cv::getTickCount();
         int64 elapsed_t = stop_t - start_t;
         double time_elapsed = elapsed_t / cv::getTickFrequency();
-        cout << "time elapsed: "<< time_elapsed <<endl;
+        cout << "time elapsed: "<< time_elapsed <<" seconds" <<endl;
         break;
     }
     default:
@@ -84,7 +88,6 @@ int main(int argc, char** argv)
     }
     }
 
-
     return 0;
 }
 
@@ -92,8 +95,9 @@ void show_help(char **argv) {
     cout<<"\nShotdetect version "<< APP_VERSION <<", Copyright (c) 2015 Yasin Yıldırım" <<endl<<endl<<
           "Usage: " <<  argv[0] << endl <<
           "-h               : show this help\n"
-          "-s threshold     : threshold (Default = "<< DEFAULT_THRESHOLD << ")\n"
+          "-t threshold     : threshold (Default = "<< DEFAULT_THRESHOLD << ")\n"
           "-i file          : input file path\n"
           "-o output_path   : save detected shots to output path "<<endl<<
+          "-s sample_size   : set the sample size of stored frames. (Default = "<< DEFAULT_SAMPLE_SIZE <<")\n"<<
           "-show            : display the shots on GUI (Graphical Version)" <<endl;
 }

@@ -1,7 +1,7 @@
 /*#******************************************************************************
  ** IMPORTANT: READ BEFORE DOWNLOADING, COPYING, INSTALLING OR USING.
  **
- ** By downloading, copying, installing or using the software you agree to this license (LGPL).
+ ** By downloading, copying, installing or using the software you agree to this license.
  ** If you do not agree to this license, do not download, install,
  ** copy or use the software.
  **
@@ -23,12 +23,18 @@ using namespace std;
  * @param filename: Video filename or full path
  * @param threshold: Threshold value for shot detection.
  */
-ShotDetector::ShotDetector(std::string filename, double threshold)
+ShotDetector::ShotDetector(std::string filename, double threshold): sample_size(30)
 {
     this->videoPath = filename;
     this->threshold = threshold;
 }
 
+ShotDetector::ShotDetector(std::string filename, double threshold, int sample_size)
+{
+    this->videoPath = filename;
+    this->threshold = threshold;
+    this->sample_size = sample_size;
+}
 
 bool ShotDetector::shotBoundaryDetect(cv::Mat &prevFrame, cv::Mat& currntFrame, int threshold ){
     /**
@@ -73,10 +79,6 @@ bool ShotDetector::shotBoundaryDetect(cv::Mat &prevFrame, cv::Mat& currntFrame, 
 
     // calculate the Chi-Squre distance of histograms of the adjacent frames.
     double result = compareHist( prevHist, currHist, CV_COMP_CHISQR );
-
-    /** print the results for debugging and testing
-    cout << "result: " << result <<"  ";
-    **/
 
     if(result > threshold)
     {
@@ -138,8 +140,54 @@ bool ShotDetector::shotBoundaryDetect(cv::Mat &prevFrame, cv::Mat& currntFrame){
 }
 
 /**
+ * @brief ShotDetector::shotBoundaryDetectHist: This method evaluates two adjacent frames
+ * and compares RGB histograms of frames in order to detect shot boundary.
+ * The difference from previous method is this method takes precomputed histogram of
+ * previous frame to avoid double computation of histogram in video processing loop.
+ * @param prevHist : Histogram of Previous Frame (matrix format)
+ * @param currHist: Histogram of Current Frame (matrix format)
+ * @return: Returns true if shot is detected, otherwise returns false
+ */
+bool ShotDetector::shotBoundaryDetectHist(cv::MatND &prevHist, cv::MatND& currHist){
+
+    // calculate the Chi-Squre distance of histograms of the adjacent frames.
+    double result = compareHist( prevHist, currHist, CV_COMP_CHISQR );
+
+    if(result > threshold)
+    {
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
+/**
+ * @brief ShotDetector::prepareFrame: This method calculates RGB color histogram of input image
+ * and normalizes histogram between (0, 1).
+ * @param frame: input image
+ * @return: Normalized histogram as a MATND multi dimentional matrix
+ */
+cv::MatND ShotDetector::prepareFrame(cv::Mat &frame){
+    int channels[] = {0, 1, 2};
+    MatND currHist;
+    //histogram size (bins) for r,g,b channels equal to 32.
+    int histSize[] = {32, 32, 32};
+    // color ranges for rgb channels are between (0, 256)
+    float color_ranges[] = { 0, 256 };
+    const float* ranges[] = { color_ranges, color_ranges, color_ranges };
+    calcHist(&frame, 1, channels, Mat(), currHist, 3, histSize, ranges, true, false);
+
+    // normalize histograms
+    double s = cv::sum(currHist)[0];
+    currHist.convertTo(currHist, currHist.type(), 1./s, 0);
+    return currHist;
+}
+
+/**
  * @brief ShotDetector::processVideo: This method process video and detect shot boundaries
- * at video. Results are stored in a file.
+ * at video with graphical interface. Results are stored in a file.
  * @param outputFileName: Results are stored in given filename
  * @param format: Format type of output file. It can be XML, YAML or TEXT (basic txt file format)
  */
@@ -147,6 +195,12 @@ void ShotDetector::processVideo(std::string outputFileName, OutputFormat format)
     VideoCapture cap(videoPath);
     stringstream ss;
     ss << outputFileName;
+
+    //create directory if not exists
+    string create_dir_command("mkdir -p ");
+    create_dir_command += outputFileName;
+    system(create_dir_command.c_str());
+
     if(format == XML){
         ss << ".xml";
     }else if(format == YAML){
@@ -156,14 +210,15 @@ void ShotDetector::processVideo(std::string outputFileName, OutputFormat format)
     }else{
         //should never been reached
     }
-    outputFileName = ss.str();
+
     //store the result in xml format
-    FileStorage fstorage(outputFileName, FileStorage::WRITE);
+    FileStorage fstorage(ss.str(), FileStorage::WRITE);
 
     /** store the information whether shot is found at previous frame
      * in order to detect fades and dissolves
     **/
     bool shotFoundAtPrev = false;
+    bool shotStartStored = false;
 
     if(!cap.isOpened()){
         cout<<"error openning video!!" << endl;
@@ -178,6 +233,27 @@ void ShotDetector::processVideo(std::string outputFileName, OutputFormat format)
             <<"frame_count" << (int) cap.get(CV_CAP_PROP_FRAME_COUNT) << "}" << "]" ;
 
     fstorage << "Shots" << "[" ;
+    fstorage << "{:"<< "begin_frame_number" <<(int) cap.get(CV_CAP_PROP_POS_FRAMES) << "begin_time" << miliseconds_to_DHMS( cap.get(CV_CAP_PROP_POS_MSEC) ) ;
+    shotStartStored = true;
+
+    //store the shot frame to output path
+#ifdef _WIN32
+    string rootShotPath(outputFileName);
+    if(outputFileName.at(outputFileName.size() -1) != '\\')
+        rootShotPath.append("\\");
+#else
+    string rootShotPath(outputFileName);
+    if(outputFileName.at(outputFileName.size() -1) != '/')
+        rootShotPath.append("/");
+#endif
+
+    //save the inital frame which is the start of first shot.
+    string initialShotPath(rootShotPath);
+    stringstream filestream;
+    filestream << "frame_" << cap.get(CV_CAP_PROP_POS_FRAMES) <<".jpg";
+    initialShotPath.append(filestream.str());
+    imwrite(initialShotPath, prevFrame);
+    int frameCounter = 0;
 
     while(1){
         Mat grabbedFrame, originalFrame;
@@ -185,13 +261,54 @@ void ShotDetector::processVideo(std::string outputFileName, OutputFormat format)
         originalFrame = grabbedFrame.clone();
         if(grabbedFrame.empty()){
             cout<<"empty frame!" << endl;
+            if(!shotFoundAtPrev)
+            {
+                int frame_number = (int) cap.get(CV_CAP_PROP_POS_FRAMES);
+                fstorage << "end_frame_number" << frame_number<< "end_time" << miliseconds_to_DHMS( cap.get(CV_CAP_PROP_POS_MSEC) ) << "}";
+                string frameStoragePath(rootShotPath);
+                stringstream framestream;
+
+                framestream << frame_number <<".jpg";
+                frameStoragePath.append("frame_").append(framestream.str());
+                imwrite(frameStoragePath, prevFrame);
+                //shot is already saved, so clear frame counter
+                frameCounter = 0;
+            }
             break;
         }
         bool result = shotBoundaryDetect(prevFrame, grabbedFrame);
+
+        if(shotFoundAtPrev && !shotStartStored)
+        {
+            int frame_number = (int) cap.get(CV_CAP_PROP_POS_FRAMES);
+            fstorage << "{:"<< "begin_frame_number" <<frame_number << "begin_time" << miliseconds_to_DHMS( cap.get(CV_CAP_PROP_POS_MSEC) ) ;
+            shotStartStored = true;
+
+            string frameStoragePath(rootShotPath);
+            stringstream framestream;
+
+            framestream << frame_number <<".jpg";
+            frameStoragePath.append("frame_").append(framestream.str());
+            imwrite(frameStoragePath, grabbedFrame);
+            //shot is already saved, so clear frame counter
+            frameCounter = 0;
+        }
+
         if(result){
             if(!shotFoundAtPrev)
             {
-                fstorage << "{:"<< "frame_number" <<(int) cap.get(CV_CAP_PROP_POS_FRAMES) << "time" << miliseconds_to_DHMS( cap.get(CV_CAP_PROP_POS_MSEC) ) << "}";
+                int frame_number = (int) cap.get(CV_CAP_PROP_POS_FRAMES);
+                fstorage << "end_frame_number" <<frame_number << "end_time" << miliseconds_to_DHMS( cap.get(CV_CAP_PROP_POS_MSEC) ) << "}";
+                shotStartStored = false;
+
+                string frameStoragePath(rootShotPath);
+                stringstream framestream;
+
+                framestream << frame_number <<".jpg";
+                frameStoragePath.append("frame_").append(framestream.str());
+                imwrite(frameStoragePath, grabbedFrame);
+                //shot is already saved, so clear frame counter
+                frameCounter = 0;
 
                 while(1){
                     cout<< "Shot boundary! press 'c' or 'C' to continue" << endl;
@@ -206,20 +323,65 @@ void ShotDetector::processVideo(std::string outputFileName, OutputFormat format)
         }else{
             shotFoundAtPrev = false;
         }
+
+        if(frameCounter == this->sample_size){
+            int frame_number = (int) cap.get(CV_CAP_PROP_POS_FRAMES);
+            fstorage << "frame_number" <<frame_number << "time" << miliseconds_to_DHMS( cap.get(CV_CAP_PROP_POS_MSEC) );
+            string frameStoragePath(rootShotPath);
+            stringstream framestream;
+            framestream << frame_number <<".jpg";
+            frameStoragePath.append("frame_").append(framestream.str());
+            imwrite(frameStoragePath, grabbedFrame);
+
+            //clear frame counter
+            frameCounter = 0;
+        }
+        frameCounter++;
+
         prevFrame = grabbedFrame.clone();
         imshow("Video", originalFrame);
 
         char key = waitKey(30);
-        if(key == 'q' || key == 'Q') break;
+        if(key == 'q' || key == 'Q')
+        {
+
+            /* if end of shot is stored at this time, do not add closing curly bracket */
+            if(shotFoundAtPrev && !shotStartStored)
+            {
+                int frame_number = (int) cap.get(CV_CAP_PROP_POS_FRAMES);
+                fstorage << "aborted_frame_number" <<frame_number << "time" << miliseconds_to_DHMS( cap.get(CV_CAP_PROP_POS_MSEC) );
+            }
+            /* if end of shot is NOT stored, add closing curly bracket at the end */
+            else
+            {
+                int frame_number = (int) cap.get(CV_CAP_PROP_POS_FRAMES);
+                fstorage << "aborted_frame_number" <<frame_number << "time" << miliseconds_to_DHMS( cap.get(CV_CAP_PROP_POS_MSEC) );
+                fstorage << "}" ;
+            }
+            break;
+        }
     }
     fstorage << "]" ;
     fstorage.release();
 }
 
+
+/**
+ * @brief ShotDetector::processVideo_NoGUI: This method process video and detect shot boundaries
+ * at video without graphical interface. Results are stored in a file.
+ * @param outputFileName: Results are stored in given filename
+ * @param format: Format type of output file. It can be XML, YAML or TEXT (basic txt file format)
+ */
 void ShotDetector::processVideo_NoGUI(std::string outputFileName, OutputFormat format){
     VideoCapture cap(videoPath);
     stringstream ss;
     ss << outputFileName;
+
+    //create directory if not exists
+    string create_dir_command("mkdir -p ");
+    create_dir_command += outputFileName;
+    system(create_dir_command.c_str());
+
     if(format == XML){
         ss << ".xml";
     }else if(format == YAML){
@@ -229,18 +391,31 @@ void ShotDetector::processVideo_NoGUI(std::string outputFileName, OutputFormat f
     }else{
         //should never been reached
     }
-    outputFileName = ss.str();
+
     //store the result in xml format
-    FileStorage fstorage(outputFileName, FileStorage::WRITE);
+    FileStorage fstorage(ss.str(), FileStorage::WRITE);
     /** store the information whether shot is found at previous frame in order to detect fades and dissolves  **/
     bool shotFoundAtPrev = false;
+    bool shotStartStored = false;
 
     if(!cap.isOpened()){
         cout<<"error openning video!!" << endl;
         return;
     }
     Mat prevFrame;
+    MatND prevHist;
+    int channels[] = {0, 1, 2};
+
+    //histogram size (bins) for r,g,b channels equal to 32.
+    int histSize[] = {32, 32, 32};
+    // color ranges for rgb channels are between (0, 256)
+    float color_ranges[] = { 0, 256 };
+    const float* ranges[] = { color_ranges, color_ranges, color_ranges };
+
+
     cap >> prevFrame;
+    prevHist = prepareFrame(prevFrame);
+
     fstorage << "Header" << "[" ;
     fstorage <<"{:"
             << "video_path" << videoPath
@@ -248,27 +423,108 @@ void ShotDetector::processVideo_NoGUI(std::string outputFileName, OutputFormat f
             <<"frame_count" << (int) cap.get(CV_CAP_PROP_FRAME_COUNT) << "}" << "]" ;
 
     fstorage << "Shots" << "[" ;
+    fstorage << "{:"<< "begin_frame_number" <<(int) cap.get(CV_CAP_PROP_POS_FRAMES) << "begin_time" << miliseconds_to_DHMS( cap.get(CV_CAP_PROP_POS_MSEC) ) ;
+    shotStartStored = true;
+
+    //store the shot frame to output path
+#ifdef _WIN32
+    string rootShotPath(outputFileName);
+    if(outputFileName.at(outputFileName.size() -1) != '\\')
+        rootShotPath.append("\\");
+#else
+    string rootShotPath(outputFileName);
+    if(outputFileName.at(outputFileName.size() -1) != '/')
+        rootShotPath.append("/");
+#endif
+
+    //save the inital frame which is the start of first shot.
+    string initialShotPath(rootShotPath);
+    stringstream filestream;
+    filestream << "frame_" << cap.get(CV_CAP_PROP_POS_FRAMES) <<".jpg";
+    initialShotPath.append(filestream.str());
+    imwrite(initialShotPath, prevFrame);
+    int frameCounter = 0;
 
     while(1){
-        Mat grabbedFrame, originalFrame;
+        Mat grabbedFrame;
         cap >> grabbedFrame;
-        originalFrame = grabbedFrame.clone();
+
         if(grabbedFrame.empty()){
             cout<<"empty frame!" << endl;
-            break;
-        }
-        bool result = shotBoundaryDetect(prevFrame, grabbedFrame);
-        if(result){
             if(!shotFoundAtPrev)
             {
-                fstorage << "{:"<< "frame_number" <<(int) cap.get(CV_CAP_PROP_POS_FRAMES) << "time" << miliseconds_to_DHMS( cap.get(CV_CAP_PROP_POS_MSEC) ) << "}";
+                int frame_number = (int) cap.get(CV_CAP_PROP_POS_FRAMES);
+                fstorage << "end_frame_number" << frame_number<< "end_time" << miliseconds_to_DHMS( cap.get(CV_CAP_PROP_POS_MSEC) ) << "}";
+                string frameStoragePath(rootShotPath);
+                stringstream framestream;
+
+                framestream << frame_number <<".jpg";
+                frameStoragePath.append("frame_").append(framestream.str());
+                imwrite(frameStoragePath, prevFrame);
+                //shot is already saved, so clear frame counter
+                frameCounter = 0;
+            }
+            break;
+        }
+
+        if(shotFoundAtPrev && !shotStartStored)
+        {
+            int frame_number = (int) cap.get(CV_CAP_PROP_POS_FRAMES);
+            fstorage << "{:"<< "begin_frame_number" <<frame_number << "begin_time" << miliseconds_to_DHMS( cap.get(CV_CAP_PROP_POS_MSEC) ) ;
+            shotStartStored = true;
+            string frameStoragePath(rootShotPath);
+            stringstream framestream;
+
+            framestream << frame_number <<".jpg";
+            frameStoragePath.append("frame_").append(framestream.str());
+            imwrite(frameStoragePath, grabbedFrame);
+            //shot is already saved, so clear frame counter
+            frameCounter = 0;
+        }
+        MatND grabbedHist = prepareFrame(grabbedFrame);
+        bool result = shotBoundaryDetectHist(prevHist, grabbedHist);
+        if(result)
+        {
+            if(!shotFoundAtPrev)
+            {
+                int frame_number = (int) cap.get(CV_CAP_PROP_POS_FRAMES);
+                fstorage << "end_frame_number" <<frame_number << "end_time" << miliseconds_to_DHMS( cap.get(CV_CAP_PROP_POS_MSEC) ) << "}";
+                shotStartStored = false;
+                string frameStoragePath(rootShotPath);
+                stringstream framestream;
+
+                framestream << frame_number <<".jpg";
+                frameStoragePath.append("frame_").append(framestream.str());
+                imwrite(frameStoragePath, grabbedFrame);
+                //shot is already saved, so clear frame counter
+                frameCounter = 0;
             }
             shotFoundAtPrev = true;
-        }else{
+        }
+        else
+        {
             shotFoundAtPrev = false;
         }
+
+        if(frameCounter == this->sample_size){
+            int frame_number = (int) cap.get(CV_CAP_PROP_POS_FRAMES);
+            fstorage << "frame_number" <<frame_number << "time" << miliseconds_to_DHMS( cap.get(CV_CAP_PROP_POS_MSEC) );
+            string frameStoragePath(rootShotPath);
+            stringstream framestream;
+
+            framestream << frame_number <<".jpg";
+            frameStoragePath.append("frame_").append(framestream.str());
+            imwrite(frameStoragePath, grabbedFrame);
+            //clear frame counter
+            frameCounter = 0;
+        }
+        frameCounter++;
+
         prevFrame = grabbedFrame.clone();
+        prevHist = grabbedHist.clone();
+
     }
+
     fstorage << "]" ;
     fstorage.release();
 }
@@ -282,7 +538,7 @@ std::string ShotDetector::miliseconds_to_DHMS(double duration){
 
     char buffer[20];
     int buffer_length;
-    uint timestamp_as_seconds = duration / 1000;
+    unsigned int timestamp_as_seconds = duration / 1000;
     int seconds = (int) (timestamp_as_seconds % 60);
     timestamp_as_seconds /= 60;
     int minutes = (int) (timestamp_as_seconds % 60);
@@ -300,5 +556,20 @@ std::string ShotDetector::miliseconds_to_DHMS(double duration){
     return result;
 }
 
-
+/**
+ * @brief ShotDetector::getShotFromVideo: gets detected shot (specified frame with given frame number) from video.
+ * @param frame_number: index of frame to be grabbed. Note that indexing is 0 based.
+ * @return returns frame with corresponding frame number from video.
+ */
+cv::Mat ShotDetector::getShotFromVideo(double frame_number){
+    VideoCapture cap(videoPath);
+    if(!cap.isOpened()){
+        cout << "error openning video!" <<endl;
+        return Mat();
+    }
+    cap.set(CV_CAP_PROP_POS_FRAMES, frame_number);
+    cv::Mat frame;
+    cap >> frame;
+    return frame;
+}
 
