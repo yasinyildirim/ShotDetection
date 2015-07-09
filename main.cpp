@@ -17,7 +17,7 @@
 #define DEFAULT_THRESHOLD 0.49
 #define APP_VERSION "1.0.0"
 #define ENABLE_GUI false
-#define DEFAULT_SAMPLE_SIZE 30
+#define DEFAULT_SAMPLE_PERIOD 30
 
 using namespace std;
 using namespace cv;
@@ -28,7 +28,7 @@ int main(int argc, char** argv)
 {
     double threshold = DEFAULT_THRESHOLD;
     bool showGUI = ENABLE_GUI;
-    int sample_size = DEFAULT_SAMPLE_SIZE;
+    int sample_period = DEFAULT_SAMPLE_PERIOD;
     string videoFile, outputPath;
     if (argc < 4) { // Check the value of argc. If not enough parameters have been passed, inform user and exit.
         show_help(argv);
@@ -47,7 +47,7 @@ int main(int argc, char** argv)
             } else if (string(argv[i]) == "-o") {
                 outputPath = argv[i + 1];
             } else if (string(argv[i]) == "-s") {
-                sample_size = atoi( argv[i + 1] );
+                sample_period = atoi( argv[i + 1] );
             } else if (string(argv[i]) == "-h") {
                 show_help(argv);
             }
@@ -63,14 +63,14 @@ int main(int argc, char** argv)
     switch(showGUI){
     case true:
     {
-        ShotDetector sd(videoFile, threshold, sample_size);
+        ShotDetector sd(videoFile, threshold, sample_period);
         sd.processVideo(outputPath, ShotDetector::XML);
         break;
     }
     case false:
     {
         cout <<"video file: " << videoFile <<endl;
-        ShotDetector sd(videoFile, threshold, sample_size);
+        ShotDetector sd(videoFile, threshold, sample_period);
         int64 start_t =  cv::getTickCount();
         sd.processVideo_NoGUI(outputPath, ShotDetector::XML);
 
@@ -98,6 +98,6 @@ void show_help(char **argv) {
           "-t threshold     : threshold (Default = "<< DEFAULT_THRESHOLD << ")\n"
           "-i file          : input file path\n"
           "-o output_path   : save detected shots to output path "<<endl<<
-          "-s sample_size   : set the sample size of stored frames. (Default = "<< DEFAULT_SAMPLE_SIZE <<")\n"<<
+          "-s sample_period : set the sample period of stored frames. (Default = "<< DEFAULT_SAMPLE_PERIOD <<")\n"<<
           "-show            : display the shots on GUI (Graphical Version)" <<endl;
 }

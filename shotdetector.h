@@ -24,7 +24,7 @@ class ShotDetector
 public:
     enum OutputFormat {XML, YAML, TEXT};
     ShotDetector(std::string filename, double threshold);
-    ShotDetector(std::string filename, double threshold, int sample_size);
+    ShotDetector(std::string filename, double threshold, int sample_period);
     void processVideo(std::string outputFileName, OutputFormat format);
     void processVideo_NoGUI(std::string outputFileName, OutputFormat format);
     std::string videoPath;
@@ -37,7 +37,7 @@ private:
     std::string miliseconds_to_DHMS(double duration);
     cv::Mat currentFrame;
     double threshold;
-    int sample_size;
+    int sample_period;
 
 };
 

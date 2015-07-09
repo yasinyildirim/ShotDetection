@@ -23,17 +23,17 @@ using namespace std;
  * @param filename: Video filename or full path
  * @param threshold: Threshold value for shot detection.
  */
-ShotDetector::ShotDetector(std::string filename, double threshold): sample_size(0)
+ShotDetector::ShotDetector(std::string filename, double threshold): sample_period(0)
 {
     this->videoPath = filename;
     this->threshold = threshold;
 }
 
-ShotDetector::ShotDetector(std::string filename, double threshold, int sample_size)
+ShotDetector::ShotDetector(std::string filename, double threshold, int sample_period)
 {
     this->videoPath = filename;
     this->threshold = threshold;
-    this->sample_size = sample_size;
+    this->sample_period = sample_period;
 }
 
 bool ShotDetector::shotBoundaryDetect(cv::Mat &prevFrame, cv::Mat& currntFrame, int threshold ){
@@ -330,7 +330,7 @@ void ShotDetector::processVideo(std::string outputFileName, OutputFormat format)
             shotFoundAtPrev = false;
         }
 
-        if(this->sample_size != 0 && frameCounter == this->sample_size){
+        if(this->sample_period != 0 && frameCounter == this->sample_period){
             int frame_number = (int) cap.get(CV_CAP_PROP_POS_FRAMES);
             fstorage << "frame_number" <<frame_number << "time" << miliseconds_to_DHMS( cap.get(CV_CAP_PROP_POS_MSEC) );
             string frameStoragePath(rootShotPath);
@@ -512,7 +512,7 @@ void ShotDetector::processVideo_NoGUI(std::string outputFileName, OutputFormat f
             shotFoundAtPrev = false;
         }
 
-        if(this->sample_size != 0 && frameCounter == this->sample_size){
+        if(this->sample_period != 0 && frameCounter == this->sample_period){
             int frame_number = (int) cap.get(CV_CAP_PROP_POS_FRAMES);
             fstorage << "frame_number" <<frame_number << "time" << miliseconds_to_DHMS( cap.get(CV_CAP_PROP_POS_MSEC) );
             string frameStoragePath(rootShotPath);
