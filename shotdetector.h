@@ -19,6 +19,9 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include <iostream>
 
+namespace cv {
+double compareHistCustom( InputArray _H1, InputArray _H2, int method );
+}
 class ShotDetector
 {
 public:

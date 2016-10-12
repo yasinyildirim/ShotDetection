@@ -78,7 +78,7 @@ bool ShotDetector::shotBoundaryDetect(cv::Mat &prevFrame, cv::Mat& currntFrame, 
     **/
 
     // calculate the Chi-Squre distance of histograms of the adjacent frames.
-    double result = compareHist( prevHist, currHist, CV_COMP_CHISQR );
+    double result = compareHistCustom( prevHist, currHist, CV_COMP_CHISQR );
 
     if(result > threshold)
     {
@@ -123,7 +123,7 @@ bool ShotDetector::shotBoundaryDetect(cv::Mat &prevFrame, cv::Mat& currntFrame){
     **/
 
     // calculate the Chi-Squre distance of histograms of the adjacent frames.
-    double result = compareHist( prevHist, currHist, CV_COMP_CHISQR );
+    double result = compareHistCustom( prevHist, currHist, CV_COMP_CHISQR );
 
     /** print the results for debugging and testing
     cout << "result: " << result <<"  ";
@@ -151,7 +151,7 @@ bool ShotDetector::shotBoundaryDetect(cv::Mat &prevFrame, cv::Mat& currntFrame){
 bool ShotDetector::shotBoundaryDetectHist(cv::MatND &prevHist, cv::MatND& currHist){
 
     // calculate the Chi-Squre distance of histograms of the adjacent frames.
-    double result = compareHist( prevHist, currHist, CV_COMP_CHISQR );
+    double result = compareHistCustom( prevHist, currHist, CV_COMP_CHISQR );
 
     if(result > threshold)
     {
@@ -578,4 +578,88 @@ cv::Mat ShotDetector::getShotFromVideo(double frame_number){
     cap >> frame;
     return frame;
 }
+
+double cv::compareHistCustom( InputArray _H1, InputArray _H2, int method )
+{
+    Mat H1 = _H1.getMat(), H2 = _H2.getMat();
+    const Mat* arrays[] = {&H1, &H2, 0};
+    Mat planes[2];
+    NAryMatIterator it(arrays, planes);
+    double result = 0;
+    int j, len = (int)it.size;
+
+    CV_Assert( H1.type() == H2.type() && H1.type() == CV_32F );
+
+    double s1 = 0, s2 = 0, s11 = 0, s12 = 0, s22 = 0;
+
+    CV_Assert( it.planes[0].isContinuous() && it.planes[1].isContinuous() );
+
+    for( size_t i = 0; i < it.nplanes; i++, ++it )
+    {
+        const float* h1 = (const float*)it.planes[0].data;
+        const float* h2 = (const float*)it.planes[1].data;
+        len = it.planes[0].rows*it.planes[0].cols;
+
+        if( method == CV_COMP_CHISQR )
+        {
+            for( j = 0; j < len; j++ )
+            {
+                double a = h1[j] - h2[j];
+                double b = h1[j] + h2[j];
+                if( fabs(b) > FLT_EPSILON )
+                    result += a*a/b;
+            }
+        }
+        else if( method == CV_COMP_CORREL )
+        {
+            for( j = 0; j < len; j++ )
+            {
+                double a = h1[j];
+                double b = h2[j];
+
+                s12 += a*b;
+                s1 += a;
+                s11 += a*a;
+                s2 += b;
+                s22 += b*b;
+            }
+        }
+        else if( method == CV_COMP_INTERSECT )
+        {
+            for( j = 0; j < len; j++ )
+                result += std::min(h1[j], h2[j]);
+        }
+        else if( method == CV_COMP_BHATTACHARYYA )
+        {
+            for( j = 0; j < len; j++ )
+            {
+                double a = h1[j];
+                double b = h2[j];
+                result += std::sqrt(a*b);
+                s1 += a;
+                s2 += b;
+            }
+        }
+        else
+            CV_Error( CV_StsBadArg, "Unknown comparison method" );
+    }
+
+    if( method == CV_COMP_CORREL )
+    {
+        size_t total = H1.total();
+        double scale = 1./total;
+        double num = s12 - s1*s2*scale;
+        double denom2 = (s11 - s1*s1*scale)*(s22 - s2*s2*scale);
+        result = std::abs(denom2) > DBL_EPSILON ? num/std::sqrt(denom2) : 1.;
+    }
+    else if( method == CV_COMP_BHATTACHARYYA )
+    {
+        s1 *= s2;
+        s1 = fabs(s1) > FLT_EPSILON ? 1./std::sqrt(s1) : 1.;
+        result = std::sqrt(std::max(1. - result*s1, 0.));
+    }
+
+    return result;
+}
+
 
