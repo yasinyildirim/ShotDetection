@@ -17,7 +17,7 @@
 #define DEFAULT_THRESHOLD 0.49
 #define APP_VERSION "1.0.0"
 #define ENABLE_GUI false
-#define DEFAULT_SAMPLE_PERIOD 0
+#define DEFAULT_SAMPLE_PERIOD 30
 
 using namespace std;
 using namespace cv;
