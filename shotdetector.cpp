@@ -8,7 +8,7 @@
  ** See COPYING file for license information.
  **
  **  Creation - July 2015
- **      Author: Yasin Yıldırım (yildirimyasi@gmail.com), Divit Research, Istanbul, Turkey
+ **      Author: Yasin Yıldırım (yildirimyasi@gmail.com), Istanbul, Turkey
  **
 *******************************************************************************/
 
